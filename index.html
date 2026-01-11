@@ -227,13 +227,38 @@
       state.timerId = setInterval(() => {
         const next = +(Math.max(state.timeLeft - 0.1, 0)).toFixed(1);
         if (next <= 0) {
-          setState({ timeLeft: 0 });
+          state.timeLeft = 0;
           gameOver();
           return;
         }
         state.timeLeft = next;
-        render(); // 가볍게 업데이트
+        
+        // 중요: 전체 render() 대신 부분 업데이트 함수 호출
+        // render(); // -> 이것 때문에 흔들림 발생
+        updateTimerUI(); // -> 타이머만 부드럽게 갱신
       }, 100);
+    }
+
+    // 타이머 UI 부분 갱신 (흔들림 방지용)
+    function updateTimerUI() {
+      const timerBox = document.getElementById("timer-box");
+      const timerVal = document.getElementById("timer-val");
+      const progBar = document.getElementById("progress-bar");
+
+      if (timerBox && timerVal && progBar) {
+         const timeDanger = state.timeLeft < 5;
+         const barWidth = Math.min((state.timeLeft / 30) * 100, 100);
+
+         // 시간 텍스트 갱신
+         timerVal.innerText = state.timeLeft.toFixed(1) + "s";
+         
+         // 빨간색 경고 효과 (클래스 교체)
+         timerBox.className = `flex items-center gap-2 text-xl font-bold ${timeDanger ? "text-red-500 animate-pulse" : "text-gray-700"}`;
+         
+         // 게이지 바 갱신
+         progBar.style.width = `${barWidth}%`;
+         progBar.className = `h-full transition-all duration-100 ease-linear ${timeDanger ? "bg-red-500" : "bg-green-500"}`;
+      }
     }
 
     function startGame() {
@@ -412,9 +437,9 @@
         "bg-gray-50";
 
       const timeDanger = state.timeLeft < 5;
-
       const barWidth = Math.min((state.timeLeft / 30) * 100, 100);
 
+      // ID 추가: timer-box, timer-val, progress-bar
       const node = el(`
         <div class="min-h-screen flex flex-col items-center justify-center p-4 transition-colors duration-300 ${bg}">
           <div class="w-full max-w-md">
@@ -423,14 +448,14 @@
                 ${icon.star("w-6 h-6 text-yellow-400")}
                 <span>${state.score}</span>
               </div>
-              <div class="flex items-center gap-2 text-xl font-bold ${timeDanger ? "text-red-500 animate-pulse" : "text-gray-700"}">
+              <div id="timer-box" class="flex items-center gap-2 text-xl font-bold ${timeDanger ? "text-red-500 animate-pulse" : "text-gray-700"}">
                 ${icon.clock("w-6 h-6")}
-                <span>${state.timeLeft.toFixed(1)}s</span>
+                <span id="timer-val">${state.timeLeft.toFixed(1)}s</span>
               </div>
             </div>
 
             <div class="w-full bg-gray-200 h-3 rounded-full mb-8 overflow-hidden">
-              <div class="h-full transition-all duration-100 ease-linear ${timeDanger ? "bg-red-500" : "bg-green-500"}"
+              <div id="progress-bar" class="h-full transition-all duration-100 ease-linear ${timeDanger ? "bg-red-500" : "bg-green-500"}"
                 style="width:${barWidth}%"></div>
             </div>
 
