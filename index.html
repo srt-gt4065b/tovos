@@ -1,0 +1,656 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>TOEIC Voca Rush</title>
+
+  <!-- favicon 404 방지 -->
+  <link rel="icon" href="data:," />
+
+  <!-- Tailwind -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Font -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;700;900&display=swap" rel="stylesheet">
+
+  <style>
+    .font-noto { font-family: 'Noto Sans KR', sans-serif; }
+    .animate-pop { animation: pop 0.2s ease-out; }
+    @keyframes pop {
+      0% { transform: scale(0.9); }
+      50% { transform: scale(1.05); }
+      100% { transform: scale(1); }
+    }
+  </style>
+</head>
+<body class="font-noto">
+  <div id="app"></div>
+
+  <script type="module">
+    // ---------------------------
+    // Firebase (v9 modular) import
+    // ---------------------------
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
+    import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
+    import { getFirestore, collection, doc, setDoc, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
+
+    // ---------------------------
+    // Firebase config
+    // ---------------------------
+    const manualConfig = {
+      apiKey: "AIzaSyD0x0HfYjH0MJXeN39nEIyHIcSUZUdPq6Y",
+      authDomain: "toeic-voca-study.firebaseapp.com",
+      databaseURL: "https://toeic-voca-study-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "toeic-voca-study",
+      storageBucket: "toeic-voca-study.firebasestorage.app",
+      messagingSenderId: "330440361332",
+      appId: "1:330440361332:web:cf6b7ccc73a045c1b3d821"
+    };
+
+    const firebaseConfig = (manualConfig.apiKey && manualConfig.apiKey.length > 0)
+      ? manualConfig
+      : (typeof window.__firebase_config !== "undefined" ? JSON.parse(window.__firebase_config) : {});
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    // 앱 ID (환경변수 대체)
+    const appId = (typeof window.__app_id !== "undefined" && window.__app_id) ? window.__app_id : "default-app-id";
+
+    // ---------------------------
+    // Data
+    // ---------------------------
+    const VOCAB_DATA = [
+      { word: "Accomplish", meaning: "성취하다, 해내다" },
+      { word: "Negotiation", meaning: "협상" },
+      { word: "Candidate", meaning: "지원자, 후보자" },
+      { word: "Deadline", meaning: "마감일" },
+      { word: "Efficient", meaning: "효율적인" },
+      { word: "Recommendation", meaning: "추천(서)" },
+      { word: "Strategy", meaning: "전략" },
+      { word: "Purchase", meaning: "구매하다" },
+      { word: "Refund", meaning: "환불" },
+      { word: "Representative", meaning: "대표자, 직원" },
+      { word: "Inspect", meaning: "검사하다" },
+      { word: "Announce", meaning: "발표하다" },
+      { word: "Participate", meaning: "참가하다" },
+      { word: "Proposal", meaning: "제안서" },
+      { word: "Notify", meaning: "알리다, 통지하다" },
+      { word: "Expand", meaning: "확장하다" },
+      { word: "Recruit", meaning: "채용하다" },
+      { word: "Inventory", meaning: "재고" },
+      { word: "Agenda", meaning: "안건, 의제" },
+      { word: "Budget", meaning: "예산" },
+      { word: "Comply", meaning: "따르다, 준수하다" },
+      { word: "Distribution", meaning: "유통, 배급" },
+      { word: "Equipment", meaning: "장비" },
+      { word: "Feedback", meaning: "의견, 반응" },
+      { word: "Guarantee", meaning: "보장하다, 보증" },
+      { word: "Implement", meaning: "시행하다" },
+      { word: "Maintain", meaning: "유지하다" },
+      { word: "Postpone", meaning: "연기하다" },
+      { word: "Promote", meaning: "승진시키다, 홍보하다" },
+      { word: "Register", meaning: "등록하다" },
+      { word: "Schedule", meaning: "일정을 잡다" },
+      { word: "Subscription", meaning: "구독" },
+      { word: "Warranty", meaning: "품질 보증" },
+      { word: "Colleague", meaning: "동료" },
+      { word: "Conference", meaning: "회의, 학회" },
+      { word: "Confirm", meaning: "확인하다" },
+      { word: "Cooperate", meaning: "협력하다" },
+      { word: "Corporation", meaning: "기업, 회사" },
+      { word: "Executive", meaning: "임원, 경영진" },
+      { word: "Headquarters", meaning: "본사" },
+      { word: "Inquire", meaning: "문의하다" },
+      { word: "Investigate", meaning: "조사하다" },
+      { word: "Merger", meaning: "합병" },
+      { word: "Productivity", meaning: "생산성" },
+      { word: "Quarter", meaning: "분기, 4분의 1" },
+      { word: "Reception", meaning: "접수처, 환영회" },
+      { word: "Shipment", meaning: "선적, 배송" },
+      { word: "Vacancy", meaning: "공석, 빈 방" },
+      { word: "Valid", meaning: "유효한" },
+      { word: "Workshop", meaning: "워크숍, 연수" }
+    ];
+
+    const INITIAL_TIME = 15;
+    const TIME_BONUS = 2;
+    const TIME_PENALTY = 3;
+
+    // ---------------------------
+    // Minimal "lucide-like" inline icons (SVG)
+    // ---------------------------
+    const icon = {
+      bookOpen: (cls="") => `
+        <svg class="${cls}" xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M2 4v16c0 .6.4 1 1 1h7V5H3c-.6 0-1 .4-1 1Z"/><path d="M22 4v16c0 .6-.4 1-1 1h-7V5h7c.6 0 1 .4 1 1Z"/><path d="M10 5v16"/><path d="M14 5v16"/>
+        </svg>
+      `,
+      play: (cls="") => `
+        <svg class="${cls}" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M8 5v14l11-7z"></path>
+        </svg>
+      `,
+      list: (cls="") => `
+        <svg class="${cls}" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+        </svg>
+      `,
+      user: (cls="") => `
+        <svg class="${cls}" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="7" r="4"/>
+        </svg>
+      `,
+      star: (cls="") => `
+        <svg class="${cls}" xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="0" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 17.3l-6.18 3.73 1.64-7.03L2 9.24l7.19-.61L12 2l2.81 6.63 7.19.61-5.46 4.76 1.64 7.03z"/>
+        </svg>
+      `,
+      clock: (cls="") => `
+        <svg class="${cls}" xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+        </svg>
+      `,
+      trophy: (cls="") => `
+        <svg class="${cls}" xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+          <path d="M18 4h2a1 1 0 0 1 1 1v2a5 5 0 0 1-5 5h-1.1A6.01 6.01 0 0 1 13 14.9V17h3a1 1 0 0 1 0 2H8a1 1 0 0 1 0-2h3v-2.1A6.01 6.01 0 0 1 9.1 12H8A5 5 0 0 1 3 7V5a1 1 0 0 1 1-1h2V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1Zm-2 0V4H8v0Zm2 2v3a3 3 0 0 0 3-3V6h-3ZM6 6H3v0a3 3 0 0 0 3 3V6Z"/>
+        </svg>
+      `,
+      rotate: (cls="") => `
+        <svg class="${cls}" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 12a9 9 0 1 1-3-6.7"/><polyline points="21 3 21 9 15 9"/>
+        </svg>
+      `
+    };
+
+    // ---------------------------
+    // Simple state store
+    // ---------------------------
+    const state = {
+      user: null,
+      gameState: "menu", // menu, playing, gameover, leaderboard
+      currentWord: null,
+      options: [],
+      score: 0,
+      highScore: 0,
+      timeLeft: INITIAL_TIME,
+      feedback: null, // correct | wrong | null
+
+      leaderboard: [],
+      nickname: "",
+      isSaving: false,
+
+      timerId: null,
+      unsubLeaderboard: null
+    };
+
+    const $app = document.getElementById("app");
+
+    function setState(patch) {
+      Object.assign(state, patch);
+      render();
+    }
+
+    function shuffle(arr) {
+      return [...arr].sort(() => Math.random() - 0.5);
+    }
+
+    function generateQuestion() {
+      const randomIdx = Math.floor(Math.random() * VOCAB_DATA.length);
+      const answer = VOCAB_DATA[randomIdx];
+
+      const distractors = [];
+      while (distractors.length < 3) {
+        const r = Math.floor(Math.random() * VOCAB_DATA.length);
+        const cand = VOCAB_DATA[r];
+        const already = distractors.some(d => d.word === cand.word);
+        if (cand.word !== answer.word && !already) distractors.push(cand);
+      }
+
+      const allOptions = shuffle([...distractors, answer]);
+      setState({ currentWord: answer, options: allOptions });
+    }
+
+    function stopTimer() {
+      if (state.timerId) {
+        clearInterval(state.timerId);
+        state.timerId = null;
+      }
+    }
+
+    function startTimer() {
+      stopTimer();
+      state.timerId = setInterval(() => {
+        const next = +(Math.max(state.timeLeft - 0.1, 0)).toFixed(1);
+        if (next <= 0) {
+          setState({ timeLeft: 0 });
+          gameOver();
+          return;
+        }
+        state.timeLeft = next;
+        render(); // 가볍게 업데이트
+      }, 100);
+    }
+
+    function startGame() {
+      stopTimer();
+      setState({
+        score: 0,
+        timeLeft: INITIAL_TIME,
+        feedback: null,
+        gameState: "playing"
+      });
+      generateQuestion();
+      startTimer();
+    }
+
+    function gameOver() {
+      stopTimer();
+      const nextHigh = Math.max(state.highScore, state.score);
+      setState({ gameState: "gameover", highScore: nextHigh });
+    }
+
+    function handleAnswer(selectedMeaning) {
+      if (state.gameState !== "playing") return;
+      if (!state.currentWord) return;
+
+      if (selectedMeaning === state.currentWord.meaning) {
+        const nextScore = state.score + 10;
+        const nextTime = Math.min(state.timeLeft + TIME_BONUS, 30);
+        setState({ score: nextScore, timeLeft: +nextTime.toFixed(1), feedback: "correct" });
+        setTimeout(() => setState({ feedback: null }), 300);
+        generateQuestion();
+      } else {
+        const nextTime = Math.max(state.timeLeft - TIME_PENALTY, 0);
+        setState({ timeLeft: +nextTime.toFixed(1), feedback: "wrong" });
+        setTimeout(() => setState({ feedback: null }), 300);
+      }
+    }
+
+    async function saveScoreToFirestore() {
+      if (!state.user || !state.nickname.trim()) {
+        alert("닉네임을 입력해주세요!");
+        return;
+      }
+
+      setState({ isSaving: true });
+      try {
+        localStorage.setItem("toeicUserNickname", state.nickname);
+
+        const myRecord = state.leaderboard.find(d => d.uid === state.user.uid);
+        const currentBest = myRecord ? (myRecord.score || 0) : 0;
+
+        const userDocRef = doc(db, "artifacts", appId, "public", "data", "leaderboard", state.user.uid);
+
+        // 현재 점수가 기존 기록보다 높거나, 첫 기록이면 저장
+        if (!myRecord || state.score > currentBest) {
+          await setDoc(userDocRef, {
+            uid: state.user.uid,
+            nickname: state.nickname.trim(),
+            score: state.score,
+            timestamp: serverTimestamp()
+          });
+        }
+
+        setState({ gameState: "leaderboard" });
+      } catch (e) {
+        console.error("Save Error:", e);
+        alert("점수 저장에 실패했습니다.");
+      } finally {
+        setState({ isSaving: false });
+      }
+    }
+
+    function subscribeLeaderboard() {
+      if (!state.user) return;
+
+      // 기존 구독 해제
+      if (state.unsubLeaderboard) {
+        state.unsubLeaderboard();
+        state.unsubLeaderboard = null;
+      }
+
+      const colRef = collection(db, "artifacts", appId, "public", "data", "leaderboard");
+      state.unsubLeaderboard = onSnapshot(colRef, (snapshot) => {
+        const data = [];
+        snapshot.forEach((d) => data.push({ id: d.id, ...d.data() }));
+
+        data.sort((a, b) => (b.score || 0) - (a.score || 0));
+
+        // 내 최고점 동기화
+        const myRecord = data.find(x => x.uid === state.user.uid);
+        const myBest = myRecord ? (myRecord.score || 0) : 0;
+        const nextHigh = Math.max(state.highScore, myBest);
+
+        setState({ leaderboard: data, highScore: nextHigh });
+      }, (err) => {
+        console.error("Firestore Error:", err);
+      });
+    }
+
+    // ---------------------------
+    // Render
+    // ---------------------------
+    function el(html) {
+      const t = document.createElement("template");
+      t.innerHTML = html.trim();
+      return t.content.firstElementChild;
+    }
+
+    function setView(node) {
+      $app.innerHTML = "";
+      $app.appendChild(node);
+    }
+
+    function renderMenu() {
+      const node = el(`
+        <div class="min-h-screen flex flex-col items-center justify-center p-4 bg-gradient-to-br from-green-50 to-blue-50">
+          <div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md text-center border-4 border-green-200">
+            <div class="flex justify-center mb-4 text-green-600">${icon.bookOpen("w-16 h-16")}</div>
+            <h1 class="text-4xl font-black text-gray-800 mb-2 tracking-tight">TOEIC<br><span class="text-green-500">Voca Rush</span></h1>
+            <p class="text-gray-500 mb-6">토익 필수 단어 50개 완전 정복!</p>
+
+            <div class="mb-6">
+              <label class="block text-left text-sm font-bold text-gray-600 mb-1 ml-1">닉네임</label>
+              <div class="flex gap-2">
+                <div class="relative flex-1">
+                  <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+                    ${icon.user("w-4 h-4")}
+                  </div>
+                  <input id="nicknameInput" type="text"
+                    placeholder="랭킹에 등록될 이름"
+                    class="w-full pl-10 pr-3 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-green-400 font-bold text-gray-700 bg-gray-50"
+                    value="${escapeHtml(state.nickname)}"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div class="space-y-3">
+              <button id="btnStart"
+                class="w-full bg-green-500 hover:bg-green-600 text-white text-xl font-bold py-4 rounded-xl shadow-lg transform transition active:scale-95 flex items-center justify-center gap-2">
+                ${icon.play("w-5 h-5")} 게임 시작
+              </button>
+
+              <button id="btnRank"
+                class="w-full bg-white hover:bg-gray-50 text-gray-700 text-lg font-bold py-3 rounded-xl border-2 border-gray-200 shadow-sm flex items-center justify-center gap-2">
+                ${icon.list("w-5 h-5")} 랭킹 보기
+              </button>
+            </div>
+
+            <div class="mt-6 text-gray-400 text-xs flex items-center justify-center gap-1">
+              ${state.user ? `<span class="text-green-600 font-bold">● 온라인 연결됨</span>` : `<span>○ 연결 중...</span>`}
+            </div>
+          </div>
+        </div>
+      `);
+
+      node.querySelector("#nicknameInput").addEventListener("input", (e) => {
+        state.nickname = e.target.value;
+      });
+
+      node.querySelector("#btnStart").addEventListener("click", () => {
+        setState({ nickname: state.nickname });
+        startGame();
+      });
+
+      node.querySelector("#btnRank").addEventListener("click", () => {
+        setState({ nickname: state.nickname, gameState: "leaderboard" });
+      });
+
+      return node;
+    }
+
+    function renderPlaying() {
+      const bg =
+        state.feedback === "correct" ? "bg-green-100" :
+        state.feedback === "wrong" ? "bg-red-100" :
+        "bg-gray-50";
+
+      const timeDanger = state.timeLeft < 5;
+
+      const barWidth = Math.min((state.timeLeft / 30) * 100, 100);
+
+      const node = el(`
+        <div class="min-h-screen flex flex-col items-center justify-center p-4 transition-colors duration-300 ${bg}">
+          <div class="w-full max-w-md">
+            <div class="flex justify-between items-center mb-4 px-2">
+              <div class="flex items-center gap-2 text-xl font-bold text-gray-700">
+                ${icon.star("w-6 h-6 text-yellow-400")}
+                <span>${state.score}</span>
+              </div>
+              <div class="flex items-center gap-2 text-xl font-bold ${timeDanger ? "text-red-500 animate-pulse" : "text-gray-700"}">
+                ${icon.clock("w-6 h-6")}
+                <span>${state.timeLeft.toFixed(1)}s</span>
+              </div>
+            </div>
+
+            <div class="w-full bg-gray-200 h-3 rounded-full mb-8 overflow-hidden">
+              <div class="h-full transition-all duration-100 ease-linear ${timeDanger ? "bg-red-500" : "bg-green-500"}"
+                style="width:${barWidth}%"></div>
+            </div>
+
+            <div class="bg-white rounded-2xl shadow-xl p-8 mb-6 text-center animate-pop relative border-b-4 border-gray-200">
+              <div class="text-sm text-gray-400 uppercase tracking-widest font-bold mb-2">Word</div>
+              <h2 class="text-4xl md:text-5xl font-black text-gray-800 break-words">${escapeHtml(state.currentWord?.word || "")}</h2>
+            </div>
+
+            <div class="grid grid-cols-1 gap-3" id="optionsWrap"></div>
+          </div>
+        </div>
+      `);
+
+      const wrap = node.querySelector("#optionsWrap");
+      state.options.forEach((opt, idx) => {
+        const btn = el(`
+          <button class="bg-white hover:bg-blue-50 text-gray-700 font-semibold py-4 px-6 rounded-xl shadow-sm border-2 border-gray-100 hover:border-blue-300 transition-all text-lg active:scale-95 text-left">
+            <span class="inline-block w-6 h-6 bg-gray-100 text-gray-500 text-xs rounded-full text-center leading-6 mr-3">${idx + 1}</span>
+            ${escapeHtml(opt.meaning)}
+          </button>
+        `);
+        btn.addEventListener("click", () => handleAnswer(opt.meaning));
+        wrap.appendChild(btn);
+      });
+
+      return node;
+    }
+
+    function renderGameOver() {
+      const best = Math.max(state.score, state.highScore);
+
+      const node = el(`
+        <div class="min-h-screen flex flex-col items-center justify-center p-4 bg-gray-900 bg-opacity-95 text-white">
+          <div class="bg-white text-gray-800 p-8 rounded-2xl shadow-2xl w-full max-w-md text-center animate-pop">
+            <div class="text-6xl mb-4">🎉</div>
+            <h2 class="text-3xl font-black mb-2">Game Over!</h2>
+            <p class="text-gray-500 mb-6">수고하셨습니다!</p>
+
+            <div class="bg-gray-100 rounded-xl p-6 mb-6">
+              <div class="text-sm text-gray-500 mb-1">Final Score</div>
+              <div class="text-5xl font-black text-green-600 mb-4">${state.score}</div>
+
+              <div class="flex justify-center items-center gap-2 text-sm font-semibold text-gray-600">
+                ${icon.trophy("w-4 h-4 text-yellow-500")}
+                <span>개인 최고: ${best}</span>
+              </div>
+            </div>
+
+            ${state.score > 0 ? `
+              <div class="mb-6">
+                <div id="nicknameBox" class="${state.nickname ? "hidden" : ""}">
+                  <input id="nicknameInput2" type="text" placeholder="닉네임 입력"
+                    class="w-full px-4 py-3 border-2 border-gray-300 rounded-xl mb-3 text-center font-bold text-gray-800"
+                    value="${escapeHtml(state.nickname)}"
+                  />
+                </div>
+
+                <button id="btnSave" ${state.isSaving ? "disabled" : ""}
+                  class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 rounded-xl shadow-md transition flex items-center justify-center gap-2 disabled:opacity-50">
+                  ${state.isSaving ? "저장 중..." : "랭킹에 점수 등록하기"}
+                </button>
+              </div>
+            ` : ""}
+
+            <div class="flex gap-3">
+              <button id="btnMenu" class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-3 rounded-xl transition">메뉴로</button>
+              <button id="btnRetry" class="flex-1 bg-green-500 hover:bg-green-600 text-white font-bold py-3 rounded-xl shadow-lg transition flex items-center justify-center gap-2">
+                ${icon.rotate("w-4 h-4")} 다시 하기
+              </button>
+            </div>
+          </div>
+        </div>
+      `);
+
+      const btnMenu = node.querySelector("#btnMenu");
+      const btnRetry = node.querySelector("#btnRetry");
+      btnMenu.addEventListener("click", () => setState({ gameState: "menu" }));
+      btnRetry.addEventListener("click", () => startGame());
+
+      const input2 = node.querySelector("#nicknameInput2");
+      if (input2) {
+        input2.addEventListener("input", (e) => {
+          state.nickname = e.target.value;
+        });
+      }
+
+      const btnSave = node.querySelector("#btnSave");
+      if (btnSave) {
+        btnSave.addEventListener("click", async () => {
+          // 게임오버 화면에서 닉네임이 비어있으면 입력 표시
+          if (!state.nickname.trim()) {
+            alert("닉네임을 입력해주세요!");
+            return;
+          }
+          await saveScoreToFirestore();
+        });
+      }
+
+      return node;
+    }
+
+    function renderLeaderboard() {
+      const node = el(`
+        <div class="min-h-screen flex flex-col items-center justify-center p-4 bg-gray-50">
+          <div class="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col max-h-[80vh]">
+            <div class="p-6 bg-green-500 text-white text-center shrink-0">
+              <div class="flex justify-center mb-2">
+                ${icon.trophy("w-10 h-10 text-yellow-300 drop-shadow-md")}
+              </div>
+              <h2 class="text-2xl font-black">명예의 전당</h2>
+              <p class="opacity-90 text-sm">Top 50 Players</p>
+            </div>
+
+            <div class="overflow-y-auto p-4 flex-1" id="rankWrap"></div>
+
+            <div class="p-4 border-t border-gray-100 bg-gray-50 shrink-0">
+              <button id="btnClose"
+                class="w-full bg-white hover:bg-gray-100 text-gray-700 font-bold py-3 rounded-xl border border-gray-300 shadow-sm transition">
+                닫기
+              </button>
+            </div>
+          </div>
+        </div>
+      `);
+
+      node.querySelector("#btnClose").addEventListener("click", () => setState({ gameState: "menu" }));
+
+      const wrap = node.querySelector("#rankWrap");
+
+      if (!state.leaderboard || state.leaderboard.length === 0) {
+        wrap.appendChild(el(`
+          <div class="text-center text-gray-400 py-10">
+            아직 등록된 랭킹이 없습니다.<br>첫 번째 주인공이 되어보세요!
+          </div>
+        `));
+      } else {
+        const list = el(`<div class="space-y-2"></div>`);
+        state.leaderboard.slice(0, 50).forEach((item, index) => {
+          const mine = item.uid === state.user?.uid;
+          const badgeClass =
+            index === 0 ? "bg-yellow-400 text-white" :
+            index === 1 ? "bg-gray-300 text-white" :
+            index === 2 ? "bg-orange-300 text-white" :
+            "bg-gray-200 text-gray-500";
+
+          const row = el(`
+            <div class="flex items-center p-3 rounded-xl ${mine ? "bg-yellow-50 border-2 border-yellow-200" : "bg-gray-50 border border-gray-100"}">
+              <div class="w-8 h-8 flex items-center justify-center rounded-full font-black mr-3 ${badgeClass}">
+                ${index + 1}
+              </div>
+              <div class="flex-1">
+                <div class="font-bold text-gray-800">${escapeHtml(item.nickname || "")}</div>
+                ${mine ? `<div class="text-xs text-green-600 font-semibold">나의 기록</div>` : ""}
+              </div>
+              <div class="font-black text-xl text-gray-700 font-mono">${Number(item.score || 0).toLocaleString()}</div>
+            </div>
+          `);
+          list.appendChild(row);
+        });
+        wrap.appendChild(list);
+      }
+
+      return node;
+    }
+
+    function render() {
+      // 화면 전환 시 타이머 관리
+      if (state.gameState !== "playing") stopTimer();
+      if (state.gameState === "playing" && !state.timerId) startTimer();
+
+      let view;
+      if (state.gameState === "menu") view = renderMenu();
+      else if (state.gameState === "playing") view = renderPlaying();
+      else if (state.gameState === "gameover") view = renderGameOver();
+      else if (state.gameState === "leaderboard") view = renderLeaderboard();
+      else view = renderMenu();
+
+      setView(view);
+    }
+
+    function escapeHtml(s) {
+      return String(s ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    // ---------------------------
+    // Auth init
+    // ---------------------------
+    (async function initAuth() {
+      try {
+        const isManualMode = manualConfig.apiKey && manualConfig.apiKey.length > 0;
+
+        if (!isManualMode && typeof window.__initial_auth_token !== "undefined" && window.__initial_auth_token) {
+          await signInWithCustomToken(auth, window.__initial_auth_token);
+        } else {
+          await signInAnonymously(auth);
+        }
+      } catch (e) {
+        console.error("Auth Error:", e);
+      }
+    })();
+
+    onAuthStateChanged(auth, (currentUser) => {
+      state.user = currentUser;
+
+      const savedName = localStorage.getItem("toeicUserNickname");
+      if (savedName && !state.nickname) state.nickname = savedName;
+
+      // 리더보드 구독
+      if (currentUser) subscribeLeaderboard();
+
+      render();
+    });
+
+    // 초기 렌더
+    render();
+  </script>
+</body>
+</html>
